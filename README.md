@@ -9,6 +9,8 @@
 
 ![見積書・請求書の編集画面](docs/invoice.png)
 
+> 💼 導入・カスタマイズのご案内ページ：[service.html](service.html)（公開中のサイトでは `…/service.html`）
+
 ## 主な機能
 
 ### 1. 見積書・請求書・納品書・領収書（PDF出力）
@@ -98,6 +100,7 @@ js/templates.js   メールテンプレート
 js/analyze.js     CSV・Excel 集計
 js/settings.js    自社情報・帳票設定・バックアップ
 js/sample.js      サンプルデータ
+service.html      導入・カスタマイズの紹介ページ（問い合わせ先はファイル末尾の CONFIG で変更）
 ```
 
 ## 消費税の計算について
