@@ -29,7 +29,7 @@ window.Sample = {
     const docs = [
       { ...(await Docs.blank('quote')), ...to(mirai), issueDate: d(-9), dueDate: d(21), status: '提出済', subject: '請求業務 効率化支援', deliveryDate: 'ご発注後3週間',
         items: [{ name: '業務ヒアリング・要件整理', qty: 1, unit: '式', price: 200000, taxRate: 10 }, { name: '業務アプリ導入・初期設定', qty: 1, unit: '式', price: 300000, taxRate: 10 }, { name: '操作説明会（2時間）', qty: 2, unit: '回', price: 50000, taxRate: 10 }] },
-      { ...(await Docs.blank('invoice')), ...to(aoba), issueDate: d(-40), dueDate: d(-10), status: '送付済', subject: 'Webサイト保守（先月分）',
+      { ...(await Docs.blank('invoice')), ...to(aoba), issueDate: d(-40), dueDate: d(-10), status: '送付済', subject: 'Webサイト保守（先月分）', recurring: true,
         items: [{ name: 'Webサイト保守 月額', qty: 1, unit: '月', price: 50000, taxRate: 10 }, { name: '更新作業（追加分）', qty: 3, unit: '時間', price: 6000, taxRate: 10 }] },
       { ...(await Docs.blank('invoice')), ...to(sakura), issueDate: d(-3), status: '送付済', subject: '打ち合わせ用 茶菓子・資料印刷',
         items: [{ name: '資料印刷・製本', qty: 20, unit: '部', price: 800, taxRate: 10 }, { name: '茶菓子（軽減税率対象）', qty: 2, unit: '箱', price: 1500, taxRate: 8 }] },
@@ -39,6 +39,7 @@ window.Sample = {
     // 番号は保存のたびに採番し直して重複を避ける
     for (const doc of docs) {
       doc.number = await Docs.nextNumber(doc.type, doc.issueDate);
+      if (doc.recurring) doc.seriesId = doc.id = DB.uid();
       await DB.put('documents', doc);
     }
 

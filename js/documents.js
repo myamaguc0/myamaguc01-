@@ -204,7 +204,8 @@ window.Docs = (() => {
 
   async function duplicate(doc) {
     const copy = JSON.parse(JSON.stringify(doc));
-    delete copy.id; delete copy.createdAt; delete copy.sourceId; delete copy.sourceQuoteId;
+    delete copy.id; delete copy.createdAt; delete copy.sourceId; delete copy.sourceQuoteId; delete copy.seriesId;
+    copy.recurring = false;
     copy.issueDate = U.ymd();
     copy.number = await nextNumber(copy.type, copy.issueDate);
     copy.status = '下書き';
@@ -212,7 +213,36 @@ window.Docs = (() => {
     return DB.put('documents', copy);
   }
 
-  return { TYPES, CONVERT, RATES, STAMP_THRESHOLD, calc, blank, nextNumber, paperHTML, print, convert, duplicate, isOverdue, needsStamp, statusBadge, typeBadge };
+  // 定期請求：seriesId でまとめた請求書のうち最新の1件を元に、今月分がなければ作る
+  const monthLabel = (ym) => `${Number(ym.slice(0, 4))}年${Number(ym.slice(5, 7))}月`;
+  function pendingRecurring(docs, ym = U.ymd().slice(0, 7)) {
+    const latest = new Map();
+    docs.filter((d) => d.type === 'invoice' && d.seriesId).forEach((d) => {
+      const cur = latest.get(d.seriesId);
+      if (!cur || (d.issueDate || '') > (cur.issueDate || '')) latest.set(d.seriesId, d);
+    });
+    return [...latest.values()].filter((d) => d.recurring && (d.issueDate || '').slice(0, 7) < ym);
+  }
+  async function createRecurring(src) {
+    const ym = U.ymd().slice(0, 7);
+    const from = (src.issueDate || '').slice(0, 7);
+    // 「2026年10月」「10月分」のような月の表記を今月に置き換える
+    const bump = (t) => String(t || '')
+      .split(monthLabel(from)).join(monthLabel(ym))
+      .replace(new RegExp(`(^|[^0-9])${Number(from.slice(5))}月分`, 'g'), `$1${Number(ym.slice(5))}月分`);
+    const doc = JSON.parse(JSON.stringify(src));
+    delete doc.id; delete doc.createdAt; delete doc.sourceId;
+    Object.assign(doc, {
+      issueDate: U.ymd(), number: await nextNumber('invoice', U.ymd()), status: '下書き',
+      dueDate: defaultDue('invoice', U.ymd(), await Settings.get()), recurring: true, seriesId: src.seriesId,
+      subject: bump(src.subject), notes: bump(src.notes), items: doc.items.map((it) => ({ ...it, name: bump(it.name) })),
+    });
+    src.recurring = false; // 継続の印は最新の請求書に移す
+    await DB.put('documents', src);
+    return DB.put('documents', doc);
+  }
+
+  return { pendingRecurring, createRecurring, monthLabel, TYPES, CONVERT, RATES, STAMP_THRESHOLD, calc, blank, nextNumber, paperHTML, print, convert, duplicate, isOverdue, needsStamp, statusBadge, typeBadge };
 })();
 
 /* ---------- 一覧 ---------- */
@@ -228,6 +258,7 @@ Pages.documents = async (view) => {
   const unpaidSum = unpaid.reduce((a, d) => a + Docs.calc(d, s.rounding).total, 0);
   const overdue = unpaid.filter(Docs.isOverdue);
   const openQuotes = docs.filter((d) => d.type === 'quote' && d.status === '提出済');
+  const pending = Docs.pendingRecurring(docs);
 
   view.innerHTML = `
     <div class="page-head">
@@ -247,6 +278,9 @@ Pages.documents = async (view) => {
       <div class="card stat"><div class="label">支払期限超過</div><div class="value ${overdue.length ? 'danger-text' : ''}">${overdue.length}件</div><div class="sub">${U.yen(overdue.reduce((a, d) => a + Docs.calc(d, s.rounding).total, 0))}</div></div>
       <div class="card stat"><div class="label">回答待ちの見積</div><div class="value">${openQuotes.length}件</div><div class="sub">${U.yen(openQuotes.reduce((a, d) => a + Docs.calc(d, s.rounding).total, 0))}</div></div>
     </div>
+    ${pending.length ? `<div class="hint" style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
+      <span><b>今月分の定期請求書が${pending.length}件、まだ作成されていません。</b>（${pending.map((d) => U.esc(d.toName)).join('、')}）</span>
+      <button class="btn btn-primary btn-sm" id="recur">今月分の定期請求書を作成</button></div>` : ''}
     <div class="card">
       <div class="toolbar">
         <div class="seg" id="seg">
@@ -301,6 +335,18 @@ Pages.documents = async (view) => {
     const tr = e.target.closest('tr[data-id]');
     if (tr) location.hash = `#/documents/${tr.dataset.id}`;
   };
+  if ($('#recur')) $('#recur').onclick = () => U.modal({
+    title: '今月分の定期請求書を作成',
+    body: `<p>前回の請求書をもとに、次の${pending.length}件を「下書き」で作成します。作成後に内容を確認してから送付してください。</p>
+      <ul class="list-plain" style="margin-top:10px">${pending.map((d) => `<li><span>${U.esc(d.toName)}<br><span class="small muted">${U.esc(d.subject)}</span></span><b>${U.yen(Docs.calc(d, s.rounding).total)}</b></li>`).join('')}</ul>`,
+    okText: `${pending.length}件を作成`,
+    onOk: async () => {
+      for (const d of pending) await Docs.createRecurring(d);
+      sessionStorage.setItem('docs.type', 'invoice');
+      U.toast(`${pending.length}件の請求書を作成しました`);
+      Pages.documents(view);
+    },
+  });
   $('#csv').onclick = () => {
     const rows = [['種別', '番号', '発行日', '期限', '宛先', '件名', '税抜金額', '消費税', '税込金額', '状態']];
     filtered().forEach((d) => {
@@ -358,6 +404,9 @@ Pages.documentEdit = async (view, { id, type }) => {
               ? `<label class="field span-2"><span>但し書き</span><input name="subject" value="${U.esc(doc.subject)}" placeholder="例：Webサイト制作費"><small>「但し ○○ として」の ○○ に入ります。「お品代」より具体的な内容がおすすめです。</small></label>`
               : `<label class="field span-2"><span>件名</span><input name="subject" value="${U.esc(doc.subject)}" placeholder="例：Webサイト保守業務（2026年11月分）"></label>`}
             ${T.deliveryLabel ? `<label class="field"><span>${T.deliveryLabel}</span><input name="deliveryDate" value="${U.esc(doc.deliveryDate)}" placeholder="${doc.type === 'quote' ? '例：ご発注後2週間' : '例：2026年11月30日'}"></label>` : ''}
+            ${doc.type === 'invoice' ? `<label class="span-2" style="display:flex; gap:8px; align-items:flex-start; font-size:13px">
+              <input type="checkbox" name="recurring" ${doc.recurring ? 'checked' : ''} style="margin-top:4px">
+              <span><b>毎月の定期請求にする</b><br><span class="muted">翌月以降、一覧の「今月分の定期請求書を作成」で、この内容の請求書をまとめて作れます。件名などの「${Docs.monthLabel(doc.issueDate.slice(0, 7))}」「${Number(doc.issueDate.slice(5, 7))}月分」は、自動で作成月に置き換わります。</span></span></label>` : ''}
             ${T.terms ? `<label class="field"><span>お支払条件</span><input name="paymentTerms" value="${U.esc(doc.paymentTerms)}" placeholder="例：月末締め翌月末払い"></label>` : ''}
           </div>
         </div>
@@ -494,6 +543,7 @@ Pages.documentEdit = async (view, { id, type }) => {
     // 宛名を手で変えた場合は顧客との紐づけを外す
     const cu = customers.find((c) => c.id === doc.customerId);
     if (cu && cu.company !== doc.toName) doc.customerId = '';
+    if (doc.recurring && !doc.seriesId) { doc.id = doc.id || DB.uid(); doc.seriesId = doc.id; }
     await DB.put('documents', doc);
     dirty = false;
     if (!silent) U.toast(`${T.label}を保存しました`);

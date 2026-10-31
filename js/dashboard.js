@@ -19,7 +19,13 @@ Pages.dashboard = async (view) => {
     text: `${U.esc(d.toName)}（${U.esc(d.number)}・${U.yen(total(d))}）の入金を確認`, href: `#/documents/${d.id}` }));
   docs.filter((d) => d.type === 'quote' && d.status === '提出済' && U.daysFromToday(d.issueDate) <= -7).forEach((d) => todo.push({ pri: 2,
     tag: '<span class="badge badge-blue">見積フォロー</span>', text: `${U.esc(d.toName)}「${U.esc(d.subject || d.number)}」の検討状況を確認（提出から${-U.daysFromToday(d.issueDate)}日）`, href: `#/documents/${d.id}` }));
+  const pending = Docs.pendingRecurring(docs);
+  if (pending.length) todo.push({ pri: 1, tag: '<span class="badge badge-blue">定期請求</span>', text: `今月分の定期請求書（${pending.length}件）を作成`, href: '#/documents' });
   todo.sort((a, b) => a.pri - b.pri);
+
+  // 直近6か月の請求額（下書きを除く請求書、税込）
+  const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 5 + i); return U.ymd(d).slice(0, 7); });
+  const monthly = months.map((m) => docs.filter((d) => d.type === 'invoice' && d.status !== '下書き' && (d.issueDate || '').startsWith(m)).reduce((a, d) => a + total(d), 0));
 
   const invoices = docs.filter((d) => d.type === 'invoice' && d.status !== '下書き');
   const billed = invoices.filter((d) => (d.issueDate || '').startsWith(month)).reduce((a, d) => a + total(d), 0);
@@ -61,6 +67,11 @@ Pages.dashboard = async (view) => {
       <div class="card stat"><div class="label">今日やること</div><div class="value ${todo.length ? 'warn-text' : ''}">${todo.length}件</div><div class="sub">${todo.length ? '下の一覧を確認' : 'すべて対応済み'}</div></div>
     </div>
 
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head"><h2>月別の請求額（直近6か月・税込）</h2><span class="small muted">下書きを除く請求書の合計</span></div>
+      <div class="chart-box" style="height:220px"><canvas id="mchart" role="img" aria-label="月別の請求額"></canvas></div>
+    </div>
+
     <div class="grid grid-2">
       <div class="card">
         <h2>今日やること</h2>
@@ -83,5 +94,18 @@ Pages.dashboard = async (view) => {
     </div>`;
 
   const btn = view.querySelector('#sample');
-  if (btn) btn.onclick = async () => { await Sample.load(); Settings.invalidate(); U.toast('サンプルデータを読み込みました'); Pages.dashboard(view); };
+  if (btn) btn.onclick = async () => { await Sample.load(); Settings.invalidate(); U.toast('サンプルデータを読み込みました'); window.dispatchEvent(new HashChangeEvent('hashchange')); };
+
+  const css = getComputedStyle(document.documentElement);
+  const ink = css.getPropertyValue('--muted').trim(), grid = css.getPropertyValue('--border').trim();
+  const chart = new Chart(view.querySelector('#mchart'), {
+    type: 'bar',
+    data: { labels: months.map((m) => `${Number(m.slice(5))}月`), datasets: [{ label: '請求額', data: monthly, backgroundColor: Analyze.colors()[0], borderRadius: 4, borderSkipped: 'start', maxBarThickness: 44 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { title: (c) => Docs.monthLabel(months[c[0].dataIndex]), label: (c) => ` ${U.yen(c.parsed.y)}` } } },
+      scales: { x: { grid: { display: false }, ticks: { color: ink }, border: { color: grid } }, y: { beginAtZero: true, ticks: { color: ink, callback: (v) => (v >= 10000 ? `${v / 10000}万` : v) }, grid: { color: grid }, border: { display: false } } },
+    },
+  });
+  return () => chart.destroy();
 };
