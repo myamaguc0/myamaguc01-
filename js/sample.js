@@ -34,10 +34,19 @@ window.Sample = {
       { ...(await Docs.blank('invoice')), ...to(sakura), issueDate: d(-3), status: '送付済', subject: '打ち合わせ用 茶菓子・資料印刷',
         items: [{ name: '資料印刷・製本', qty: 20, unit: '部', price: 800, taxRate: 10 }, { name: '茶菓子（軽減税率対象）', qty: 2, unit: '箱', price: 1500, taxRate: 8 }] },
     ];
+    docs.push({ ...(await Docs.blank('receipt')), ...to(aoba), issueDate: d(-35), status: '発行済', subject: 'Webサイト保守費（前々月分）',
+      items: [{ name: 'Webサイト保守 月額', qty: 1, unit: '月', price: 50000, taxRate: 10 }, { name: '更新作業（追加分）', qty: 2, unit: '時間', price: 6000, taxRate: 10 }] });
     // 番号は保存のたびに採番し直して重複を避ける
     for (const doc of docs) {
       doc.number = await Docs.nextNumber(doc.type, doc.issueDate);
       await DB.put('documents', doc);
     }
+
+    const known = new Set((await DB.all('products')).map((p) => p.name));
+    const products = [
+      ['Webサイト保守 月額', '月', 50000, 10], ['更新作業（追加分）', '時間', 6000, 10], ['LP制作', '式', 180000, 10],
+      ['業務ヒアリング・要件整理', '式', 200000, 10], ['操作説明会（2時間）', '回', 50000, 10], ['資料印刷・製本', '部', 800, 10], ['茶菓子（軽減税率対象）', '箱', 1500, 8],
+    ];
+    for (const [name, unit, price, taxRate] of products) if (!known.has(name)) await DB.put('products', { name, unit, price, taxRate });
   },
 };

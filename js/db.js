@@ -1,8 +1,8 @@
 /* IndexedDB の薄いラッパー。全データはこのブラウザ内に保存される */
 window.DB = (() => {
   const NAME = 'biz-assistant';
-  const VERSION = 1;
-  const STORES = ['documents', 'customers', 'templates', 'settings'];
+  const VERSION = 2;
+  const STORES = ['documents', 'customers', 'templates', 'settings', 'products'];
   let dbPromise;
 
   function open() {
@@ -15,7 +15,14 @@ window.DB = (() => {
           if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id' });
         });
       };
-      req.onsuccess = () => resolve(req.result);
+      // 古いバージョンを開いている別タブがあると更新が止まるので、案内を出す
+      req.onblocked = () => alert('Biz Assistant を開いている別のタブを閉じてから、このページを再読み込みしてください。');
+      req.onsuccess = () => {
+        const db = req.result;
+        // 新しいバージョンが別タブで開かれたら、この接続を閉じて更新を妨げない
+        db.onversionchange = () => { db.close(); dbPromise = null; };
+        resolve(db);
+      };
       req.onerror = () => reject(req.error);
     });
     return dbPromise;

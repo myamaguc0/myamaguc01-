@@ -2,9 +2,10 @@
 (() => {
   const routes = [
     [/^#?\/?$/, 'dashboard', () => Pages.dashboard],
-    [/^#\/documents\/new\/(quote|invoice)$/, 'documents', (m) => (v) => Pages.documentEdit(v, { type: m[1] })],
+    [/^#\/documents\/new\/(quote|invoice|delivery|receipt)$/, 'documents', (m) => (v) => Pages.documentEdit(v, { type: m[1] })],
     [/^#\/documents\/([\w-]+)$/, 'documents', (m) => (v) => Pages.documentEdit(v, { id: m[1] })],
     [/^#\/documents$/, 'documents', () => Pages.documents],
+    [/^#\/products$/, 'documents', () => Pages.products],
     [/^#\/customers\/([\w-]+)$/, 'customers', (m) => (v) => Pages.customerDetail(v, { id: m[1] })],
     [/^#\/customers$/, 'customers', () => Pages.customers],
     [/^#\/templates$/, 'templates', () => Pages.templates],

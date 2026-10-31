@@ -77,7 +77,7 @@ Pages.dashboard = async (view) => {
     <div class="card" style="margin-top:16px">
       <div class="card-head"><h2>最近の帳票</h2><a class="small" href="#/documents">すべて見る →</a></div>
       ${recent.length ? `<div class="table-wrap"><table class="table"><tbody>${recent.map((d) => `<tr class="clickable" onclick="location.hash='#/documents/${d.id}'">
-        <td><span class="badge ${d.type === 'quote' ? '' : 'badge-blue'}">${Docs.TYPES[d.type].label}</span></td><td class="nowrap">${U.esc(d.number)}</td>
+        <td>${Docs.typeBadge(d)}</td><td class="nowrap">${U.esc(d.number)}</td>
         <td>${U.esc(d.toName)}</td><td>${U.esc(d.subject)}</td><td class="r">${U.yen(total(d))}</td><td>${Docs.statusBadge(d)}</td></tr>`).join('')}</tbody></table></div>`
         : '<p class="muted small">まだ帳票がありません。</p>'}
     </div>`;

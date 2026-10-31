@@ -2,12 +2,23 @@
 window.Pages = window.Pages || {};
 
 window.Docs = (() => {
+  // dueLabel：期限欄の名前（null なら期限なし）、deliveryLabel：納期欄の名前（null なら非表示）
   const TYPES = {
-    quote: { label: '見積書', title: '御見積書', totalLabel: '御見積金額', lead: '下記の通りお見積り申し上げます。', statuses: ['下書き', '提出済', '受注', '失注'] },
-    invoice: { label: '請求書', title: '請求書', totalLabel: 'ご請求金額', lead: '下記の通りご請求申し上げます。', statuses: ['下書き', '送付済', '入金済'] },
+    quote: { label: '見積書', title: '御見積書', totalLabel: '御見積金額', lead: '下記の通りお見積り申し上げます。', statuses: ['下書き', '提出済', '受注', '失注'],
+      prefix: 'Q', dueLabel: '有効期限', deliveryLabel: '納期', terms: true, badge: '' },
+    invoice: { label: '請求書', title: '請求書', totalLabel: 'ご請求金額', lead: '下記の通りご請求申し上げます。', statuses: ['下書き', '送付済', '入金済'],
+      prefix: 'INV', dueLabel: 'お支払期限', deliveryLabel: '納品日', terms: true, bank: true, badge: 'badge-blue' },
+    delivery: { label: '納品書', title: '納品書', totalLabel: '合計金額', lead: '下記の通り納品いたします。', statuses: ['下書き', '発行済'],
+      prefix: 'DN', dueLabel: null, deliveryLabel: '納品日', terms: false, badge: 'badge-amber' },
+    receipt: { label: '領収書', title: '領収書', totalLabel: '金額', lead: '', statuses: ['下書き', '発行済'],
+      prefix: 'RC', dueLabel: null, deliveryLabel: null, terms: false, badge: 'badge-green' },
   };
+  // 変換できる先：見積書 → 請求書・納品書、請求書 → 納品書・領収書
+  const CONVERT = { quote: ['invoice', 'delivery'], invoice: ['delivery', 'receipt'], delivery: [], receipt: [] };
   const RATES = [10, 8, 0];
-  const STATUS_BADGE = { 下書き: '', 提出済: 'badge-blue', 送付済: 'badge-blue', 受注: 'badge-green', 入金済: 'badge-green', 失注: 'badge-red' };
+  const STATUS_BADGE = { 下書き: '', 提出済: 'badge-blue', 送付済: 'badge-blue', 発行済: 'badge-blue', 受注: 'badge-green', 入金済: 'badge-green', 失注: 'badge-red' };
+  // 印紙税：領収書（売上代金の受取書）は税抜5万円以上で収入印紙が必要
+  const STAMP_THRESHOLD = 50000;
 
   const roundFn = (mode) => ({ floor: Math.floor, ceil: Math.ceil, round: Math.round }[mode] || Math.floor);
 
@@ -33,7 +44,7 @@ window.Docs = (() => {
 
   async function nextNumber(type, issueDate) {
     const s = await Settings.get();
-    const prefix = (type === 'quote' ? s.quotePrefix : s.invoicePrefix) || (type === 'quote' ? 'Q' : 'INV');
+    const prefix = s[type + 'Prefix'] || TYPES[type].prefix;
     const ym = (issueDate || U.ymd()).slice(0, 7).replace('-', '');
     const head = `${prefix}-${ym}-`;
     const docs = await DB.all('documents');
@@ -43,6 +54,10 @@ window.Docs = (() => {
     return head + String(max + 1).padStart(3, '0');
   }
 
+  // 期限の初期値：見積書は有効日数後、請求書は翌月末、納品書・領収書はなし
+  const defaultDue = (type, issueDate, s) =>
+    type === 'quote' ? U.addDays(issueDate, Number(s.quoteValidDays) || 30) : type === 'invoice' ? U.endOfNextMonth(issueDate) : '';
+
   async function blank(type) {
     const s = await Settings.get();
     const issueDate = U.ymd();
@@ -51,7 +66,7 @@ window.Docs = (() => {
       number: await nextNumber(type, issueDate),
       status: '下書き',
       issueDate,
-      dueDate: type === 'quote' ? U.addDays(issueDate, Number(s.quoteValidDays) || 30) : U.endOfNextMonth(issueDate),
+      dueDate: defaultDue(type, issueDate, s),
       customerId: '',
       toName: '',
       honorific: '御中',
@@ -61,27 +76,46 @@ window.Docs = (() => {
       deliveryDate: '',
       paymentTerms: type === 'quote' ? '月末締め翌月末払い' : '',
       items: [{ name: '', qty: 1, unit: '式', price: 0, taxRate: 10 }],
-      notes: type === 'quote' ? s.quoteNotes : s.invoiceNotes,
+      notes: s[type + 'Notes'] || '',
     };
   }
 
   const isOverdue = (d) => d.type === 'invoice' && d.status !== '入金済' && d.dueDate && U.daysFromToday(d.dueDate) < 0;
+  const needsStamp = (doc, c) => doc.type === 'receipt' && c.subtotal >= STAMP_THRESHOLD;
 
   function statusBadge(d) {
     if (isOverdue(d)) return `<span class="badge badge-red">期限超過</span>`;
     return `<span class="badge ${STATUS_BADGE[d.status] || ''}">${U.esc(d.status)}</span>`;
   }
+  const typeBadge = (d) => `<span class="badge ${TYPES[d.type].badge}">${TYPES[d.type].label}</span>`;
 
   // A4 帳票の HTML。画面プレビューと印刷で共通
   function paperHTML(doc, s) {
     const T = TYPES[doc.type];
     const c = calc(doc, s.rounding);
+    const receipt = doc.type === 'receipt';
     const hasReduced = c.lines.some((l) => l.taxRate === 8 && (l.name || l.amount));
     const rows = c.lines.filter((l) => l.name || l.amount);
-    const pad = Math.max(0, 10 - rows.length);
+    const pad = Math.max(0, (receipt ? 5 : 10) - rows.length);
     const rateLabel = (r) => (r === 10 ? '10%対象' : r === 8 ? '8%対象（軽減税率）' : '非課税・対象外');
     const usedRates = RATES.filter((r) => c.byRate[r].base !== 0);
-    const dateLabel = doc.type === 'quote' ? '有効期限' : 'お支払期限';
+
+    // 領収書は金額・但し書き・印紙欄を大きく見せる
+    const head = receipt ? `
+      <div class="p-receipt">
+        ${needsStamp(doc, c) ? '<div class="p-stamp">収入<br>印紙</div>' : ''}
+        <div class="p-amt"><span class="t">金額</span><span class="v">${U.yen(c.total)}-</span></div>
+        <div class="p-tax-note">（うち消費税等 ${U.yen(c.tax)}）</div>
+        <div class="p-tadashi">但し　${U.esc(doc.subject || '')}${doc.subject ? '　として' : ''}</div>
+        <div>上記正に領収いたしました。</div>
+      </div>` : `
+      <div class="p-total"><span class="t">${T.totalLabel}（税込）</span><span class="v">${U.yen(c.total)}</span></div>
+      <table class="p-cond">
+        ${doc.subject ? `<tr><td>件名</td><td>${U.esc(doc.subject)}</td></tr>` : ''}
+        ${T.dueLabel && doc.dueDate ? `<tr><td>${T.dueLabel}</td><td>${U.jpDate(doc.dueDate)}</td></tr>` : ''}
+        ${T.deliveryLabel && doc.deliveryDate ? `<tr><td>${T.deliveryLabel}</td><td>${U.esc(doc.deliveryDate)}</td></tr>` : ''}
+        ${T.terms && doc.paymentTerms ? `<tr><td>お支払条件</td><td>${U.esc(doc.paymentTerms)}</td></tr>` : ''}
+      </table>`;
 
     return `
     <div class="paper">
@@ -91,13 +125,13 @@ window.Docs = (() => {
           <div class="name">${U.esc(doc.toName || '　')} ${U.esc(doc.toName ? doc.honorific : '')}</div>
           ${doc.toAttention ? `<div class="sub">${U.esc(doc.toAttention)}</div>` : ''}
           ${doc.toAddress ? `<div class="sub small">${U.esc(doc.toAddress)}</div>` : ''}
-          <p class="p-lead">${T.lead}</p>
+          ${T.lead ? `<p class="p-lead">${T.lead}</p>` : ''}
         </div>
         <div>
           <div class="p-meta">
             <table>
               <tr><td>No.</td><td>${U.esc(doc.number)}</td></tr>
-              <tr><td>発行日</td><td>${U.jpDate(doc.issueDate)}</td></tr>
+              <tr><td>${receipt ? '領収日' : '発行日'}</td><td>${U.jpDate(doc.issueDate)}</td></tr>
             </table>
           </div>
           <div class="p-from">
@@ -111,14 +145,7 @@ window.Docs = (() => {
           </div>
         </div>
       </div>
-
-      <div class="p-total"><span class="t">${T.totalLabel}（税込）</span><span class="v">${U.yen(c.total)}</span></div>
-      <table class="p-cond">
-        ${doc.subject ? `<tr><td>件名</td><td>${U.esc(doc.subject)}</td></tr>` : ''}
-        ${doc.dueDate ? `<tr><td>${dateLabel}</td><td>${U.jpDate(doc.dueDate)}</td></tr>` : ''}
-        ${doc.deliveryDate ? `<tr><td>${doc.type === 'quote' ? '納期' : '納品日'}</td><td>${U.esc(doc.deliveryDate)}</td></tr>` : ''}
-        ${doc.paymentTerms ? `<tr><td>お支払条件</td><td>${U.esc(doc.paymentTerms)}</td></tr>` : ''}
-      </table>
+      ${head}
 
       <table class="p-items">
         <thead><tr><th style="width:50%">品目・内容</th><th style="width:9%">数量</th><th style="width:8%">単位</th><th style="width:15%">単価</th><th style="width:18%">金額</th></tr></thead>
@@ -144,7 +171,7 @@ window.Docs = (() => {
       </div>
       ${hasReduced ? '<div class="p-foot">※印は軽減税率（8%）対象品目です。</div>' : ''}
 
-      ${doc.type === 'invoice' && s.bankInfo ? `<div class="p-bank"><b>お振込先</b><br>${U.esc(s.bankInfo).replace(/\n/g, '<br>')}</div>` : ''}
+      ${T.bank && s.bankInfo ? `<div class="p-bank"><b>お振込先</b><br>${U.esc(s.bankInfo).replace(/\n/g, '<br>')}</div>` : ''}
       <div class="p-note"><div class="p-note-h">備考</div>${U.esc(doc.notes)}</div>
     </div>`;
   }
@@ -164,28 +191,28 @@ window.Docs = (() => {
     setTimeout(() => window.print(), 50);
   }
 
-  async function toInvoice(quote) {
-    const inv = await blank('invoice');
-    Object.assign(inv, {
-      customerId: quote.customerId, toName: quote.toName, honorific: quote.honorific, toAttention: quote.toAttention,
-      toAddress: quote.toAddress, subject: quote.subject, items: JSON.parse(JSON.stringify(quote.items)),
-      sourceQuoteId: quote.id,
+  // 宛先・件名・明細を引き継いで別の種類の帳票を作る
+  async function convert(src, type) {
+    const doc = await blank(type);
+    Object.assign(doc, {
+      customerId: src.customerId, toName: src.toName, honorific: src.honorific, toAttention: src.toAttention,
+      toAddress: src.toAddress, subject: src.subject, deliveryDate: type === 'receipt' ? '' : src.deliveryDate,
+      items: JSON.parse(JSON.stringify(src.items)), sourceId: src.id,
     });
-    return DB.put('documents', inv);
+    return DB.put('documents', doc);
   }
 
   async function duplicate(doc) {
     const copy = JSON.parse(JSON.stringify(doc));
-    delete copy.id; delete copy.createdAt; delete copy.sourceQuoteId;
+    delete copy.id; delete copy.createdAt; delete copy.sourceId; delete copy.sourceQuoteId;
     copy.issueDate = U.ymd();
     copy.number = await nextNumber(copy.type, copy.issueDate);
     copy.status = '下書き';
-    const s = await Settings.get();
-    copy.dueDate = copy.type === 'quote' ? U.addDays(copy.issueDate, Number(s.quoteValidDays) || 30) : U.endOfNextMonth(copy.issueDate);
+    copy.dueDate = defaultDue(copy.type, copy.issueDate, await Settings.get());
     return DB.put('documents', copy);
   }
 
-  return { TYPES, RATES, calc, blank, nextNumber, paperHTML, print, toInvoice, duplicate, isOverdue, statusBadge };
+  return { TYPES, CONVERT, RATES, STAMP_THRESHOLD, calc, blank, nextNumber, paperHTML, print, convert, duplicate, isOverdue, needsStamp, statusBadge, typeBadge };
 })();
 
 /* ---------- 一覧 ---------- */
@@ -204,10 +231,13 @@ Pages.documents = async (view) => {
 
   view.innerHTML = `
     <div class="page-head">
-      <div><h1>見積書・請求書</h1><p>インボイス制度（適格請求書）に対応した帳票を作成し、PDFで保存できます。</p></div>
+      <div><h1>見積書・請求書</h1><p>インボイス制度（適格請求書）に対応した見積書・請求書・納品書・領収書を作成し、PDFで保存できます。</p></div>
       <div class="actions">
-        <a class="btn" href="#/documents/new/quote">＋ 見積書を作成</a>
-        <a class="btn btn-primary" href="#/documents/new/invoice">＋ 請求書を作成</a>
+        <a class="btn btn-ghost" href="#/products">品目マスタ</a>
+        <a class="btn" href="#/documents/new/delivery">＋ 納品書</a>
+        <a class="btn" href="#/documents/new/receipt">＋ 領収書</a>
+        <a class="btn" href="#/documents/new/quote">＋ 見積書</a>
+        <a class="btn btn-primary" href="#/documents/new/invoice">＋ 請求書</a>
       </div>
     </div>
     ${!s.companyName ? `<div class="hint" style="margin-bottom:16px">まずは <a href="#/settings">設定</a> で会社名・登録番号・振込先を登録してください。帳票に自動で印字されます。</div>` : ''}
@@ -220,10 +250,10 @@ Pages.documents = async (view) => {
     <div class="card">
       <div class="toolbar">
         <div class="seg" id="seg">
-          <button data-t="all">すべて</button><button data-t="quote">見積書</button><button data-t="invoice">請求書</button>
+          <button data-t="all">すべて</button>${Object.entries(Docs.TYPES).map(([k, t]) => `<button data-t="${k}">${t.label}</button>`).join('')}
         </div>
         <input class="input" id="q" placeholder="宛先・件名・番号で検索">
-        <select class="input" id="st"><option value="">すべてのステータス</option>${[...new Set([...Docs.TYPES.quote.statuses, ...Docs.TYPES.invoice.statuses])].map((x) => `<option>${x}</option>`).join('')}<option value="__overdue">期限超過</option></select>
+        <select class="input" id="st"><option value="">すべてのステータス</option>${[...new Set(Object.values(Docs.TYPES).flatMap((t) => t.statuses))].map((x) => `<option>${x}</option>`).join('')}<option value="__overdue">期限超過</option></select>
         <button class="btn" id="csv">CSV出力</button>
       </div>
       <div class="table-wrap" id="list"></div>
@@ -248,7 +278,7 @@ Pages.documents = async (view) => {
         <thead><tr><th>種別</th><th>番号</th><th>発行日</th><th>宛先</th><th>件名</th><th class="r">金額（税込）</th><th>期限</th><th>状態</th><th></th></tr></thead>
         <tbody>${list.map((d) => `
           <tr class="clickable" data-id="${d.id}">
-            <td><span class="badge ${d.type === 'quote' ? '' : 'badge-blue'}">${Docs.TYPES[d.type].label}</span></td>
+            <td>${Docs.typeBadge(d)}</td>
             <td class="nowrap">${U.esc(d.number)}</td>
             <td class="nowrap">${U.esc(d.issueDate)}</td>
             <td>${U.esc(d.toName)}</td>
@@ -300,6 +330,7 @@ Pages.documentEdit = async (view, { id, type }) => {
   }
   const T = Docs.TYPES[doc.type];
   const customers = (await DB.all('customers')).sort((a, b) => (a.company || '').localeCompare(b.company || '', 'ja'));
+  const products = (await DB.all('products')).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'));
   let dirty = !id;
 
   const opt = (v, label, cur) => `<option value="${U.esc(v)}" ${String(v) === String(cur) ? 'selected' : ''}>${U.esc(label)}</option>`;
@@ -308,7 +339,7 @@ Pages.documentEdit = async (view, { id, type }) => {
     <div class="page-head">
       <div><p class="small"><a href="#/documents">← 見積書・請求書</a></p><h1>${T.label}${id ? 'の編集' : 'を作成'}</h1></div>
       <div class="actions">
-        ${id && doc.type === 'quote' ? '<button class="btn" id="toInv">請求書に変換</button>' : ''}
+        ${id ? Docs.CONVERT[doc.type].map((t) => `<button class="btn" data-conv="${t}">${Docs.TYPES[t].label}を作成</button>`).join('') : ''}
         ${id ? '<button class="btn" id="dup">複製</button><button class="btn btn-ghost danger-text" id="del">削除</button>' : ''}
         <button class="btn" id="pdf">PDF出力</button>
         <button class="btn btn-primary" id="save">保存</button>
@@ -321,11 +352,13 @@ Pages.documentEdit = async (view, { id, type }) => {
           <div class="form-grid">
             <label class="field"><span>番号</span><input name="number" value="${U.esc(doc.number)}"></label>
             <label class="field"><span>ステータス</span><select name="status">${T.statuses.map((x) => opt(x, x, doc.status)).join('')}</select></label>
-            <label class="field"><span>発行日</span><input name="issueDate" type="date" value="${U.esc(doc.issueDate)}"></label>
-            <label class="field"><span>${doc.type === 'quote' ? '有効期限' : 'お支払期限'}</span><input name="dueDate" type="date" value="${U.esc(doc.dueDate)}"></label>
-            <label class="field span-2"><span>件名</span><input name="subject" value="${U.esc(doc.subject)}" placeholder="例：Webサイト保守業務（2026年11月分）"></label>
-            <label class="field"><span>${doc.type === 'quote' ? '納期' : '納品日'}</span><input name="deliveryDate" value="${U.esc(doc.deliveryDate)}" placeholder="${doc.type === 'quote' ? '例：ご発注後2週間' : '例：2026年11月30日'}"></label>
-            <label class="field"><span>お支払条件</span><input name="paymentTerms" value="${U.esc(doc.paymentTerms)}" placeholder="例：月末締め翌月末払い"></label>
+            <label class="field"><span>${doc.type === 'receipt' ? '領収日' : '発行日'}</span><input name="issueDate" type="date" value="${U.esc(doc.issueDate)}"></label>
+            ${T.dueLabel ? `<label class="field"><span>${T.dueLabel}</span><input name="dueDate" type="date" value="${U.esc(doc.dueDate)}"></label>` : ''}
+            ${doc.type === 'receipt'
+              ? `<label class="field span-2"><span>但し書き</span><input name="subject" value="${U.esc(doc.subject)}" placeholder="例：Webサイト制作費"><small>「但し ○○ として」の ○○ に入ります。「お品代」より具体的な内容がおすすめです。</small></label>`
+              : `<label class="field span-2"><span>件名</span><input name="subject" value="${U.esc(doc.subject)}" placeholder="例：Webサイト保守業務（2026年11月分）"></label>`}
+            ${T.deliveryLabel ? `<label class="field"><span>${T.deliveryLabel}</span><input name="deliveryDate" value="${U.esc(doc.deliveryDate)}" placeholder="${doc.type === 'quote' ? '例：ご発注後2週間' : '例：2026年11月30日'}"></label>` : ''}
+            ${T.terms ? `<label class="field"><span>お支払条件</span><input name="paymentTerms" value="${U.esc(doc.paymentTerms)}" placeholder="例：月末締め翌月末払い"></label>` : ''}
           </div>
         </div>
         <div class="card" id="f2">
@@ -348,7 +381,10 @@ Pages.documentEdit = async (view, { id, type }) => {
             <thead><tr><th class="c-name">品目・内容</th><th class="c-qty">数量</th><th class="c-unit">単位</th><th class="c-price">単価</th><th class="c-tax">税率</th><th class="c-amt">金額</th><th class="c-del"></th></tr></thead>
             <tbody id="items"></tbody>
           </table>
-          <div class="actions" style="margin-top:8px"><button class="btn btn-sm" id="addRow">＋ 行を追加</button></div>
+          <datalist id="plist">${products.map((p) => `<option value="${U.esc(p.name)}">${U.esc(`${U.yen(p.price)} / ${p.unit}`)}</option>`).join('')}</datalist>
+          <div class="actions" style="margin-top:8px"><button class="btn btn-sm" id="addRow">＋ 行を追加</button>
+            <button class="btn btn-sm btn-ghost" id="toMaster" title="名前のある明細のうち、未登録のものを品目マスタに追加します">明細を品目マスタに登録</button>
+            ${products.length ? '' : '<span class="small muted">品目マスタに登録すると、品名を選ぶだけで単価・単位・税率が入ります</span>'}</div>
           <div class="totals-mini" id="tot"></div>
         </div>
         <div class="card" id="f3">
@@ -366,7 +402,7 @@ Pages.documentEdit = async (view, { id, type }) => {
   function drawItems() {
     $('#items').innerHTML = doc.items.map((it, i) => `
       <tr data-i="${i}">
-        <td class="c-name"><input data-k="name" value="${U.esc(it.name)}" placeholder="品目・内容"></td>
+        <td class="c-name"><input data-k="name" value="${U.esc(it.name)}" placeholder="品目・内容" list="plist" autocomplete="off"></td>
         <td class="c-qty"><input data-k="qty" type="number" step="any" value="${U.esc(it.qty)}" aria-label="数量"></td>
         <td class="c-unit"><input data-k="unit" value="${U.esc(it.unit)}" aria-label="単位"></td>
         <td class="c-price"><input data-k="price" type="number" step="any" value="${U.esc(it.price)}" aria-label="単価"></td>
@@ -385,6 +421,7 @@ Pages.documentEdit = async (view, { id, type }) => {
     const c = Docs.calc(doc, s.rounding);
     view.querySelectorAll('#items tr').forEach((tr, i) => { tr.querySelector('[data-amt]').textContent = U.num(c.lines[i]?.amount); });
     $('#tot').innerHTML = `<span>小計 ${U.yen(c.subtotal)}</span><span>消費税 ${U.yen(c.tax)}</span><span>合計 <b>${U.yen(c.total)}</b></span>`;
+    if (Docs.needsStamp(doc, c)) $('#tot').innerHTML += '<span class="warn-text small" style="flex-basis:100%; text-align:right">税抜5万円以上のため、原則として収入印紙（200円〜）の貼付が必要です（クレジットカード払いの場合など、不要なケースもあります）</span>';
     $('#ps').innerHTML = Docs.paperHTML(doc, s);
     fit();
   }
@@ -407,6 +444,13 @@ Pages.documentEdit = async (view, { id, type }) => {
     if (k) {
       const i = Number(e.target.closest('tr').dataset.i);
       doc.items[i][k] = e.target.type === 'number' || k === 'taxRate' ? Number(e.target.value) : e.target.value;
+      // 品目マスタの品名と一致したら、単価・単位・税率を自動入力
+      const p = k === 'name' && products.find((x) => x.name === e.target.value);
+      if (p) {
+        Object.assign(doc.items[i], { unit: p.unit, price: p.price, taxRate: p.taxRate });
+        drawItems();
+        view.querySelector(`#items tr[data-i="${i}"] [data-k=qty]`).select();
+      }
     }
     markDirty();
     refresh();
@@ -422,6 +466,14 @@ Pages.documentEdit = async (view, { id, type }) => {
     doc.items.push({ name: '', qty: 1, unit: '個', price: 0, taxRate: 10 });
     drawItems(); refresh();
     view.querySelector(`#items tr:last-child input`).focus();
+  };
+  $('#toMaster').onclick = async () => {
+    const known = new Set(products.map((p) => p.name));
+    const add = doc.items.filter((it) => it.name && !known.has(it.name));
+    if (!add.length) return U.toast('新しく登録する品目はありません');
+    for (const it of add) products.push(await DB.put('products', { name: it.name, unit: it.unit, price: Number(it.price) || 0, taxRate: Number(it.taxRate) }));
+    $('#plist').innerHTML = products.map((p) => `<option value="${U.esc(p.name)}"></option>`).join('');
+    U.toast(`${add.length}件を品目マスタに登録しました`);
   };
   $('#cust').onchange = (e) => {
     const cu = customers.find((c) => c.id === e.target.value);
@@ -456,13 +508,16 @@ Pages.documentEdit = async (view, { id, type }) => {
     $('#del').onclick = () => U.confirm(`${T.label}を削除`, `「${doc.number}」を削除します。元に戻せません。`, async () => {
       await DB.remove('documents', doc.id); dirty = false; U.toast('削除しました'); location.hash = '#/documents';
     });
-    if ($('#toInv')) $('#toInv').onclick = async () => {
-      await save({ silent: true });
-      const inv = await Docs.toInvoice(doc);
-      if (doc.status !== '受注') { doc.status = '受注'; await DB.put('documents', doc); }
-      U.toast('請求書を作成しました（見積書は「受注」に更新）');
-      location.hash = `#/documents/${inv.id}`;
-    };
+    // 変換時に元の帳票のステータスも進める（見積書 → 受注、請求書から領収書 → 入金済）
+    view.querySelectorAll('[data-conv]').forEach((b) => (b.onclick = async () => {
+      if (!(await save({ silent: true }))) return;
+      const to = b.dataset.conv;
+      const created = await Docs.convert(doc, to);
+      const next = doc.type === 'quote' && to === 'invoice' ? '受注' : doc.type === 'invoice' && to === 'receipt' ? '入金済' : null;
+      if (next && doc.status !== next) { doc.status = next; await DB.put('documents', doc); }
+      U.toast(`${Docs.TYPES[to].label}を作成しました${next ? `（${T.label}は「${next}」に更新）` : ''}`);
+      location.hash = `#/documents/${created.id}`;
+    }));
   }
 
   const beforeUnload = (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } };

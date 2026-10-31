@@ -222,6 +222,14 @@ table.table { width: 100%; border-collapse: collapse; }
 .paper .p-bank { margin-top: 4mm; font-size: 9pt; }
 .paper .p-foot { margin-top: 3mm; font-size: 8pt; color: #444; }
 
+.paper .p-receipt { position: relative; margin-top: 6mm; padding: 5mm 6mm 4mm; border: 1.5px solid #111; text-align: center; }
+.paper .p-amt { display: inline-flex; align-items: baseline; gap: 8mm; border-bottom: 2px solid #111; padding: 0 6mm 1mm; margin-bottom: 2mm; }
+.paper .p-amt .t { font-size: 12pt; font-weight: 700; }
+.paper .p-amt .v { font-size: 22pt; font-weight: 700; letter-spacing: .03em; }
+.paper .p-tax-note { font-size: 9pt; margin-bottom: 3mm; }
+.paper .p-tadashi { font-size: 11pt; margin-bottom: 1.5mm; }
+.paper .p-stamp { position: absolute; left: 5mm; top: 50%; transform: translateY(-50%); width: 20mm; height: 24mm; border: 1px dashed #777; color: #777; font-size: 8pt; display: grid; place-items: center; line-height: 1.4; }
+
 /* ---------- customers ---------- */
 .kanban { display: grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 6px; }
 .kcol { background: var(--surface-2); border-radius: var(--radius); padding: 10px; min-height: 160px; }

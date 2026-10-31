@@ -17,9 +17,13 @@ window.Settings = (() => {
     rounding: 'floor',
     quotePrefix: 'Q',
     invoicePrefix: 'INV',
+    deliveryPrefix: 'DN',
+    receiptPrefix: 'RC',
     quoteValidDays: 30,
     quoteNotes: '',
     invoiceNotes: '恐れ入りますが、振込手数料は貴社にてご負担くださいますようお願い申し上げます。',
+    deliveryNotes: '',
+    receiptNotes: '',
   };
   let cache = null;
 
@@ -92,8 +96,12 @@ Pages.settings = async (view) => {
         </label>
         ${f('quotePrefix', '見積書番号の接頭辞', { help: '例：Q → Q-202611-001' })}
         ${f('invoicePrefix', '請求書番号の接頭辞', { help: '例：INV → INV-202611-001' })}
+        ${f('deliveryPrefix', '納品書番号の接頭辞', { help: '例：DN → DN-202611-001' })}
+        ${f('receiptPrefix', '領収書番号の接頭辞', { help: '例：RC → RC-202611-001' })}
         ${f('quoteNotes', '見積書の備考（初期値）', { textarea: true, span: true })}
         ${f('invoiceNotes', '請求書の備考（初期値）', { textarea: true, span: true })}
+        ${f('deliveryNotes', '納品書の備考（初期値）', { textarea: true, span: true })}
+        ${f('receiptNotes', '領収書の備考（初期値）', { textarea: true, span: true })}
       </div>
     </div>
 
