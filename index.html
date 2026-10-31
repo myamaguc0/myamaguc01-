@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Biz Assistant｜事務・営業の業務アシスタント</title>
+  <meta name="description" content="見積書・請求書の作成、顧客管理、メールテンプレート、CSV集計をブラウザだけで。データは端末内に保存されます。">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232563eb'/><path d='M9 8h9a5 5 0 0 1 1.8 9.7A5 5 0 0 1 18 27H9z' fill='white'/></svg>">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#/">
+        <span class="brand-mark">B</span>
+        <span class="brand-text">Biz Assistant</span>
+      </a>
+      <nav class="nav" id="nav">
+        <a href="#/" data-route="dashboard"><span class="ico">◎</span><span>ダッシュボード</span></a>
+        <a href="#/documents" data-route="documents"><span class="ico">¥</span><span>見積書・請求書</span></a>
+        <a href="#/customers" data-route="customers"><span class="ico">◆</span><span>顧客管理</span></a>
+        <a href="#/templates" data-route="templates"><span class="ico">✉</span><span>メールテンプレート</span></a>
+        <a href="#/analyze" data-route="analyze"><span class="ico">▤</span><span>CSV集計</span></a>
+        <a href="#/settings" data-route="settings"><span class="ico">⚙</span><span>設定・バックアップ</span></a>
+      </nav>
+      <p class="sidebar-note">データはこのブラウザ内にのみ保存されます。定期的に「設定・バックアップ」から書き出してください。</p>
+    </aside>
+    <main class="main" id="view" tabindex="-1"></main>
+  </div>
+  <div class="toast-wrap" id="toasts" aria-live="polite"></div>
+  <div class="modal-backdrop" id="modal" hidden></div>
+
+  <script src="vendor/chart.umd.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/documents.js"></script>
+  <script src="js/customers.js"></script>
+  <script src="js/templates.js"></script>
+  <script src="js/analyze.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/sample.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
