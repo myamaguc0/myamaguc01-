@@ -10,6 +10,7 @@
 ![見積書・請求書の編集画面](docs/invoice.png)
 
 > 💼 導入・カスタマイズのご案内ページ：[service.html](service.html)（公開中のサイトでは `…/service.html`）
+> 📘 使い方ガイド：[manual.html](manual.html)（印刷すると A4 の説明書になります）
 
 ## 主な機能
 

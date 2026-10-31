@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Biz Assistant 使い方ガイド</title>
+<style>
+  :root { --text: #1c2433; --muted: #5d6778; --border: #d9dfe8; --primary: #2563eb; --weak: #e8efff; --warn: #fff4e0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--text); background: #fff; font-family: "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP", "Yu Gothic UI", Meiryo, sans-serif; line-height: 1.8; font-size: 15px; }
+  main { max-width: 820px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 30px; margin: 0 0 6px; }
+  h2 { font-size: 21px; margin: 44px 0 14px; padding-bottom: 8px; border-bottom: 3px solid var(--primary); }
+  h3 { font-size: 16px; margin: 24px 0 8px; }
+  p, li { margin: 6px 0; }
+  ol, ul { padding-left: 22px; }
+  img { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; margin: 10px 0; display: block; }
+  .muted { color: var(--muted); }
+  .box { background: var(--weak); border-radius: 10px; padding: 12px 16px; margin: 14px 0; }
+  .warn { background: var(--warn); }
+  kbd { display: inline-block; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; padding: 0 6px; font-size: 13px; background: #f7f8fa; font-family: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: #f2f5f9; }
+  .toc { columns: 2; font-size: 14px; }
+  .cover { text-align: center; padding: 60px 0 30px; }
+  .cover .logo { width: 64px; height: 64px; border-radius: 16px; background: var(--primary); color: #fff; display: grid; place-items: center; font-size: 34px; font-weight: 800; margin: 0 auto 18px; }
+  @page { size: A4; margin: 16mm 14mm; }
+  @media print {
+    main { padding: 0; max-width: none; }
+    h2 { break-after: avoid; }
+    img, .box, table { break-inside: avoid; }
+    .pb { break-before: page; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="cover">
+    <div class="logo">B</div>
+    <h1>Biz Assistant 使い方ガイド</h1>
+    <p class="muted">見積書・請求書・顧客管理をブラウザだけで</p>
+  </div>
+
+  <h3>目次</h3>
+  <ol class="toc">
+    <li>はじめに（動作環境と大切なこと）</li>
+    <li>最初の設定</li>
+    <li>品目マスタの登録</li>
+    <li>顧客の登録・取り込み</li>
+    <li>見積書の作成とPDF保存</li>
+    <li>請求書・納品書・領収書の作成</li>
+    <li>顧客管理と次回アクション</li>
+    <li>メールテンプレート</li>
+    <li>CSV・Excelの集計</li>
+    <li>バックアップと復元</li>
+    <li>困ったときは</li>
+  </ol>
+
+  <h2>1. はじめに</h2>
+  <table>
+    <tr><th style="width:30%">動作環境</th><td>Windows または Mac のパソコン／Google Chrome または Microsoft Edge（最新版）</td></tr>
+    <tr><th>インストール</th><td>不要です。お渡ししたURL（またはフォルダ内の <code>index.html</code>）をブラウザで開くだけで使えます。</td></tr>
+    <tr><th>費用</th><td>月額費用はかかりません。</td></tr>
+  </table>
+  <div class="box warn">
+    <b>大切なこと：データの保存場所</b><br>
+    入力したデータは、<b>お使いのパソコンのブラウザの中だけ</b>に保存されます。外部のサーバーには送信されないため安全ですが、次の点にご注意ください。
+    <ul>
+      <li>ブラウザの「閲覧履歴データの削除」でサイトデータを消すと、データも消えます。</li>
+      <li>別のパソコンや別のブラウザでは、同じデータは表示されません。</li>
+      <li>そのため、<b>週に1回程度のバックアップ</b>（10章）をおすすめします。</li>
+    </ul>
+  </div>
+  <p>よく使う画面は、ブラウザのブックマークに登録しておくと便利です（<kbd>Ctrl</kbd>＋<kbd>D</kbd>、Macは <kbd>⌘</kbd>＋<kbd>D</kbd>）。</p>
+
+  <h2>2. 最初の設定</h2>
+  <p>左メニューの <b>「設定・バックアップ」</b> を開き、次の項目を入力して <b>「保存する」</b> を押します。ここで入力した内容が、すべての帳票に自動で印字されます。</p>
+  <table>
+    <tr><th style="width:34%">項目</th><th>説明</th></tr>
+    <tr><td>会社名・代表者名・住所・電話・メール</td><td>帳票の右上に表示されます。</td></tr>
+    <tr><td>登録番号</td><td>インボイス制度の登録番号（T＋13桁）。お持ちの場合は必ず入力してください。</td></tr>
+    <tr><td>振込先</td><td>請求書に表示されます。改行もそのまま反映されます。</td></tr>
+    <tr><td>印影（角印）画像</td><td>任意。背景が透明なPNG画像がおすすめです。</td></tr>
+    <tr><td>消費税の端数処理</td><td>通常は「切り捨て」のままで問題ありません。</td></tr>
+    <tr><td>あなたの名前</td><td>メールテンプレートの署名に使われます。</td></tr>
+  </table>
+
+  <h2>3. 品目マスタの登録</h2>
+  <p>よく使う商品・サービスを登録しておくと、帳票の明細で品名を選ぶだけで、単価・単位・税率が自動で入ります。</p>
+  <ol>
+    <li>「見積書・請求書」画面の右上にある <b>「品目マスタ」</b> を開きます。</li>
+    <li><b>「＋ 品目を追加」</b> を押し、品名・単位・単価（税抜）・税率を入力します。入力した内容は自動で保存されます。</li>
+    <li>まとめて登録したい場合は、<b>「CSV取込」</b> を使います。列名は「品名」「単位」「単価（税抜）」「税率」です。</li>
+  </ol>
+  <div class="box">💡 帳票を作ったあとに、明細の下の <b>「明細を品目マスタに登録」</b> を押すと、未登録の品目をまとめて追加できます。最初は普段どおり帳票を作るだけで、マスタが自然に揃っていきます。</div>
+
+  <h2>4. 顧客の登録・取り込み</h2>
+  <h3>1件ずつ登録する</h3>
+  <p>「顧客管理」→ <b>「＋ 顧客を追加」</b> を押し、会社名・担当者名などを入力して保存します。</p>
+  <h3>Excelの顧客リストを取り込む</h3>
+  <ol>
+    <li>「顧客管理」で顧客が0件のときに表示される <b>「取込用CSVのひな形をダウンロード」</b> を押します（2回目以降は「CSV出力」で同じ形式のファイルを取得できます）。</li>
+    <li>ひな形の列（会社名、部署、担当者名、メール、電話番号 など）に合わせて、Excelのデータを貼り付けます。<b>「会社名」列は必須</b>です。</li>
+    <li>CSVまたはExcel形式で保存し、<b>「CSV取込」</b> から選択します。</li>
+    <li>確認画面で件数を確かめて、<b>「取り込む」</b> を押します。</li>
+  </ol>
+
+  <h2>5. 見積書の作成とPDF保存</h2>
+  <img src="docs/lp-invoice.png" alt="帳票の編集画面">
+  <ol>
+    <li>「見積書・請求書」→ <b>「＋ 見積書」</b> を押します。番号は自動で付きます（例：Q-202611-001）。</li>
+    <li><b>宛先</b>：右上の「顧客から選ぶ」で選ぶと、会社名・担当者・住所が自動で入ります。</li>
+    <li><b>明細</b>：品名を入力（または品目マスタから選択）し、数量・単価・税率を入力します。<br>
+      ・金額は<b>税抜</b>で入力します。<br>
+      ・値引きは、単価をマイナスで入力します（例：-10000）。<br>
+      ・食品など軽減税率の品目は、税率を「8%※」にします。</li>
+    <li>右側のプレビューで仕上がりを確認し、<b>「保存」</b> を押します。</li>
+    <li><b>「PDF出力」</b> を押すと印刷画面が開きます。送信先（プリンター）で <b>「PDFに保存」</b> を選び、保存します。</li>
+  </ol>
+  <div class="box">💡 印刷画面の設定：用紙サイズは <b>A4</b>、余白は <b>「なし」</b> または <b>「デフォルト」</b>、<b>「背景のグラフィック」にチェック</b>を入れると、表の色もきれいに出ます。ファイル名は「見積書_番号_宛先」が自動で付きます。</div>
+
+  <h2>6. 請求書・納品書・領収書の作成</h2>
+  <p>宛先と明細を引き継いで、ワンクリックで次の帳票を作れます。</p>
+  <table>
+    <tr><th>元の帳票</th><th>作れる帳票</th><th>自動で変わること</th></tr>
+    <tr><td>見積書</td><td>請求書・納品書</td><td>請求書を作ると、見積書が「受注」になります</td></tr>
+    <tr><td>請求書</td><td>納品書・領収書</td><td>領収書を作ると、請求書が「入金済」になります</td></tr>
+  </table>
+  <ul>
+    <li><b>請求書</b>：お支払期限は翌月末が初期値です。振込先が自動で印字されます。</li>
+    <li><b>領収書</b>：「但し書き」に内容を入力します（例：Webサイト制作費）。税抜5万円以上の場合は、収入印紙の貼付欄が表示されます。</li>
+    <li>入金を確認したら、請求書のステータスを <b>「入金済」</b> にしてください。期限を過ぎても入金済になっていない請求書は、一覧とダッシュボードに「期限超過」と表示されます。</li>
+  </ul>
+
+  <h2>7. 顧客管理と次回アクション</h2>
+  <img src="docs/lp-customers.png" alt="顧客管理のボード表示">
+  <ul>
+    <li><b>ステータス</b>：リード → 商談中 → 見積提出 → 受注／失注。「ボード」表示ではカードをドラッグするだけで変更できます。</li>
+    <li><b>次回アクション</b>：顧客の画面で「予定日」と「内容」を入力しておくと、当日や期限切れの予定がダッシュボードの「今日やること」に表示されます。</li>
+    <li><b>活動履歴</b>：「＋ 記録する」で、電話・訪問・メールの内容を残せます。記録と同時に次回アクションも更新できます。</li>
+    <li>顧客の画面から、<b>「見積書を作成」</b> や <b>「メールを作成」</b> にそのまま進めます。</li>
+  </ul>
+
+  <h2>8. メールテンプレート</h2>
+  <ol>
+    <li>左の一覧からテンプレートを選びます（お礼、見積送付、請求書送付、フォロー、入金のお礼、日程調整）。</li>
+    <li>右上の <b>「宛先の顧客を選ぶ」</b> で顧客を選ぶと、会社名・担当者名などが自動で差し込まれます。</li>
+    <li>黄色で表示されている <code>{{…}}</code> は、まだ埋まっていない項目です。上の入力欄に内容を入れてください。</li>
+    <li><b>「件名をコピー」「本文をコピー」</b> で、お使いのメールソフトに貼り付けます。</li>
+  </ol>
+  <div class="box">💡 文面は自由に編集・追加できます。本文に <code>{{訪問日}}</code> のように好きな名前を書くと、その項目の入力欄が自動で現れます。</div>
+
+  <h2>9. CSV・Excelの集計</h2>
+  <img src="docs/lp-analyze.png" alt="集計とグラフ">
+  <ol>
+    <li>「CSV集計」を開き、ファイルをドラッグ＆ドロップします（1行目は見出しにしてください）。</li>
+    <li><b>軸</b>（何ごとに集計するか）、<b>集計方法</b>（合計・件数・平均など）、<b>集計する値</b>を選びます。日付の列は、月別・年別・曜日別にまとめられます。</li>
+    <li><b>内訳</b>で「担当者」などを選ぶと、色分けしたクロス集計になります。</li>
+    <li>結果は <b>「集計結果をCSVで保存」</b>（Excelでそのまま開けます）、グラフは <b>「グラフを画像で保存」</b> で保存できます。</li>
+  </ol>
+  <p class="muted">読み込んだファイルは外部に送信されません。画面を閉じると、集計の内容は消えます。</p>
+
+  <h2>10. バックアップと復元</h2>
+  <h3>バックアップ（週に1回がおすすめ）</h3>
+  <ol>
+    <li>「設定・バックアップ」→ <b>「すべてのデータを書き出す（JSON）」</b> を押します。</li>
+    <li><code>biz-assistant-backup-日付.json</code> というファイルが保存されます。社内の共有フォルダやクラウドストレージに保管してください。</li>
+  </ol>
+  <h3>復元・別のパソコンへの移行</h3>
+  <ol>
+    <li>移行先のパソコンでツールを開き、「設定・バックアップ」→ <b>「バックアップから復元」</b> を押します。</li>
+    <li>保存しておいたJSONファイルを選びます。<b>現在のデータはバックアップの内容に置き換わります。</b></li>
+  </ol>
+
+  <h2>11. 困ったときは</h2>
+  <table>
+    <tr><th style="width:38%">こんなとき</th><th>対処法</th></tr>
+    <tr><td>データが消えてしまった</td><td>バックアップファイルから復元してください（10章）。ブラウザのシークレットモードでは、データは保存されません。</td></tr>
+    <tr><td>PDFの表に色が付かない</td><td>印刷画面の詳細設定で「背景のグラフィック」にチェックを入れてください。</td></tr>
+    <tr><td>PDFが2ページに分かれる</td><td>余白を「なし」にするか、倍率を「既定」にしてください。明細が多い場合は、備考を短くすると1ページに収まります。</td></tr>
+    <tr><td>CSVが文字化けする</td><td>Shift_JIS・UTF-8のどちらにも対応しています。それでも化ける場合は、Excelで「CSV UTF-8」形式で保存し直してください。</td></tr>
+    <tr><td>「別のタブを閉じてください」と表示される</td><td>ツールを開いている他のタブをすべて閉じてから、再読み込みしてください（更新版の反映時に表示されることがあります）。</td></tr>
+    <tr><td>金額が1円ずれる</td><td>インボイス制度のルールに従い、消費税は税率ごとに合計してから端数処理しています。明細ごとに計算した場合と、1円程度ずれることがあります。</td></tr>
+  </table>
+  <p class="muted" style="margin-top:30px">本ツールは帳票作成を補助するものです。税務上の判断については、必要に応じて税理士にご相談ください。</p>
+</main>
+</body>
+</html>
