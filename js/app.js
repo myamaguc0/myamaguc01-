@@ -18,7 +18,7 @@
   async function render() {
     const hash = location.hash || '#/';
     const view = document.getElementById('view');
-    if (typeof cleanup === 'function') cleanup();
+    if (typeof cleanup === 'function') { try { cleanup(); } catch (e) { console.error(e); } }
     cleanup = null;
     for (const [re, nav, get] of routes) {
       const m = hash.match(re);
